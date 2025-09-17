@@ -29,6 +29,15 @@ By following the exercises in this project you will learn how to:
 4. Generate the accuracy dataset with `./fc_accuracy.sh`. When the log contains at least two entries, the script will produce `historical_fc_accuracy.tsv` with signed errors and qualitative accuracy ranges.
 5. Summarize the latest forecast performance with `./weekly_stats.sh [path/to/accuracy.tsv]`, which reports the minimum and maximum absolute error across the most recent seven records.
 
+## GitHub Actions automation
+
+Trigger the **Weather data pipeline** workflow from the **Actions** tab to run the full ETL on a GitHub-hosted runner. The workflow accepts an optional `city` input (default: Casablanca) and performs the following steps:
+
+1. Initializes isolated copies of the log, accuracy dataset, and manual input template.
+2. Calls `rx_poc.sh` to fetch the latest observation and next-day forecast for the requested city.
+3. Builds the historical accuracy file with `fc_accuracy.sh` and, when enough records exist, generates weekly statistics.
+4. Publishes a run summary and uploads the generated artifacts so you can review the log, accuracy dataset, and raw payload directly from GitHub.
+
 
 ## Prerequisites
 - Linux or macOS environment with Bash 4+, `curl`, `wget`, `grep`, `cut`, `head`, `tail`, and `date` available.

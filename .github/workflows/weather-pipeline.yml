@@ -1,0 +1,93 @@
+name: Weather data pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      city:
+        description: "City name understood by wttr.in"
+        required: false
+        default: "Casablanca"
+
+jobs:
+  run-pipeline:
+    name: Run weather ETL pipeline
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Ensure scripts are executable
+        run: |
+          chmod +x basic.sh rx_poc.sh fc_accuracy.sh weekly_stats.sh
+
+      - name: Execute weather pipeline
+        id: pipeline
+        env:
+          CITY: ${{ inputs.city }}
+        run: |
+          set -euo pipefail
+
+          WORKDIR="pipeline_outputs"
+          mkdir -p "$WORKDIR"
+
+          LOG_PATH="$WORKDIR/rx_poc.log"
+          ACCURACY_PATH="$WORKDIR/historical_fc_accuracy.tsv"
+          RAW_PATH="$WORKDIR/weather_report.json"
+          TEMPLATE_PATH="$WORKDIR/rx_poc_manual_input.tsv"
+
+          echo "Initializing data files"
+          ./basic.sh "$LOG_PATH" "$ACCURACY_PATH" "$TEMPLATE_PATH"
+
+          echo "Collecting weather observation and forecast for $CITY"
+          ./rx_poc.sh -c "$CITY" -l "$LOG_PATH" -o "$RAW_PATH"
+
+          echo "Computing historical accuracy dataset"
+          ./fc_accuracy.sh "$LOG_PATH" "$ACCURACY_PATH"
+
+          SUMMARY_FILE="$WORKDIR/weekly_stats.txt"
+          if [[ $(wc -l <"$ACCURACY_PATH") -gt 1 ]]; then
+            echo "Generating weekly statistics"
+            ./weekly_stats.sh "$ACCURACY_PATH" | tee "$SUMMARY_FILE"
+          else
+            echo "Not enough accuracy records to compute weekly statistics" | tee "$SUMMARY_FILE"
+          fi
+
+          {
+            echo "### Weather Pipeline Summary"
+            echo ""
+            echo "* **City:** $CITY"
+            echo "* **Log file:** $LOG_PATH"
+            echo "* **Accuracy dataset:** $ACCURACY_PATH"
+            echo ""
+            echo "#### Weekly statistics"
+            echo '```'
+            cat "$SUMMARY_FILE"
+            echo '```'
+            echo ""
+            echo "#### Latest log entry"
+            if [[ -s $LOG_PATH ]]; then
+              echo '```'
+              tail -n 1 "$LOG_PATH"
+              echo '```'
+            else
+              echo "No log entries recorded."
+            fi
+            echo ""
+            echo "#### Accuracy dataset preview"
+            if [[ -s $ACCURACY_PATH ]]; then
+              echo '```'
+              head -n 10 "$ACCURACY_PATH"
+              echo '```'
+            else
+              echo "Accuracy dataset is empty."
+            fi
+          } >>"$GITHUB_STEP_SUMMARY"
+
+      - name: Upload pipeline artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: weather-pipeline-${{ github.run_id }}
+          path: pipeline_outputs/
+          retention-days: 7
