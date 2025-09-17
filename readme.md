@@ -34,7 +34,7 @@ By following the exercises in this project you will learn how to:
    ```
 2. Confirm the file uses tabs to delimit columns. This ensures compatibility with downstream parsing utilities.
 
-## Exercise 2 – Download Raw Weather Data
+## Download Raw Weather Data
 1. Create the primary ETL script and make it executable:
    ```bash
    cat <<'EOT' > rx_poc.sh
@@ -46,7 +46,7 @@ By following the exercises in this project you will learn how to:
    ```
 2. Verify the script runs and captures a `weather_report` file. Inspect the raw response to understand the layout of temperature readings.
 
-## Exercise 3 – Extract and Load Required Data
+## Extract and Load Required Data
 1. Extend `rx_poc.sh` to parse the current observed temperature (`obs_temp`) and the forecasted noon temperature for the next day (`fc_temp`). Use pipelines with `grep`, `cut`, and `sed` to strip ANSI color codes before storing numeric values.
 2. Capture Casablanca's local date by setting the `TZ='Morocco/Casablanca'` environment variable and calling `date` for year, month, and day.
 3. Append a tab-delimited record to `rx_poc.log`:
@@ -55,7 +55,7 @@ By following the exercises in this project you will learn how to:
    ```
 4. Repeat execution daily to build a historical log. Consider adding defensive checks for API failures and malformed data.
 
-## Exercise 4 – Schedule Daily Collection
+## Schedule Daily Collection
 1. Determine the offset between your server's timezone and Casablanca (UTC+1). Use `date` and `date -u` to compare system time with UTC.
 2. Add a cron job that executes `rx_poc.sh` at the calculated system time corresponding to Casablanca noon. Example for a system on UTC-5:
    ```cron
@@ -63,7 +63,7 @@ By following the exercises in this project you will learn how to:
    ```
 3. Maintain a cron-specific log to troubleshoot failures and confirm daily runs.
 
-## Exercise 5 – Report Historical Forecast Accuracy
+## Report Historical Forecast Accuracy
 1. Initialize the derived dataset:
    ```bash
    echo -e "year\tmonth\tday\tobs_temp\tfc_temp\taccuracy\taccuracy_range" > historical_fc_accuracy.tsv
@@ -75,7 +75,7 @@ By following the exercises in this project you will learn how to:
    - Append the enriched record to `historical_fc_accuracy.tsv`.
 3. Extend the script with loops to process the full log so that every day has an accuracy assessment.
 
-## Exercise 6 – Weekly Statistics on Forecast Accuracy
+## Weekly Statistics on Forecast Accuracy
 1. Download the sample dataset for experimentation:
    ```bash
    wget https://cf-courses-data.s3.us.cloud-object-storage.appdomain.cloud/IBMSkillsNetwork-LX0117EN-Coursera/labs/synthetic_historical_fc_accuracy.tsv
