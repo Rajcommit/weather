@@ -15,11 +15,20 @@ By following the exercises in this project you will learn how to:
 ## Repository Structure
 | File | Description |
 | --- | --- |
-| `rx_poc.sh` | Intended Bash ETL script that downloads Casablanca weather data, extracts current and forecast temperatures, and appends a record to `rx_poc.log`. **Note:** the file is currently empty and must be populated with the logic outlined in Exercises 2 and 3 below.【62e87d†L1-L5】 |
-| `rx_poc.log` | Tab-delimited log file that stores the daily observations. Presently empty pending script execution.【62e87d†L5-L6】 |
-| `fc_accuracy.sh` | Placeholder for the historical forecast accuracy calculator described in Exercise 5. The script has not yet been implemented.【62e87d†L1-L4】 |
-| `weekly_stats.sh` | Bash utility that ingests the last seven forecast accuracy values, converts them to absolute errors, and reports weekly min/max statistics. The current version includes extra tutorial artifacts ("Copied!", "Wrap Toggled!") that should be removed before production use.【d86971†L1-L34】 |
-| `basic.sh` | Empty helper script placeholder.【62e87d†L1-L2】 |
+| `rx_poc.sh` | Bash ETL script that downloads Casablanca weather data from wttr.in, extracts current and next-day noon temperatures, and appends a deduplicated record to `rx_poc.log`. |
+| `rx_poc.log` | Tab-delimited log populated by `rx_poc.sh`. The header is created automatically when missing. |
+| `fc_accuracy.sh` | Processes `rx_poc.log` to calculate signed forecast errors, classify their accuracy ranges, and write `historical_fc_accuracy.tsv`. |
+| `weekly_stats.sh` | Validates the derived accuracy dataset and reports weekly minimum and maximum absolute errors. |
+| `basic.sh` | Utility helper that initializes the log, accuracy dataset, and manual input template for new environments. |
+| `rx_poc_manual_input.tsv` | Tab-delimited template that end users can populate manually when testing the accuracy workflow without calling the API. |
+
+## Quick Start
+1. Run `./basic.sh` to ensure the log (`rx_poc.log`), derived dataset (`historical_fc_accuracy.tsv`), and manual template (`rx_poc_manual_input.tsv`) exist with the correct headers.
+2. Execute `./rx_poc.sh` to download the latest Casablanca observation and next-day forecast. The script prevents duplicate entries for the same local day and stores the raw API response in `weather_report.json`.
+3. Optionally append manual records to `rx_poc_manual_input.tsv` and point `fc_accuracy.sh` at that file when testing without network access: `./fc_accuracy.sh rx_poc_manual_input.tsv manual_accuracy.tsv`.
+4. Generate the accuracy dataset with `./fc_accuracy.sh`. When the log contains at least two entries, the script will produce `historical_fc_accuracy.tsv` with signed errors and qualitative accuracy ranges.
+5. Summarize the latest forecast performance with `./weekly_stats.sh [path/to/accuracy.tsv]`, which reports the minimum and maximum absolute error across the most recent seven records.
+
 
 ## Prerequisites
 - Linux or macOS environment with Bash 4+, `curl`, `wget`, `grep`, `cut`, `head`, `tail`, and `date` available.
