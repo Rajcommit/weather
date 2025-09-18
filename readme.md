@@ -5,6 +5,7 @@ Collect daily weather observations for Casablanca (or another city) and compare 
 
 ## What You Need
 - Bash 4+, `curl`, `grep`, `cut`, `sed`, `awk`, `date`, `wget` (all standard on most Linux/macOS systems)
+- Python 3.8+ for the JSON parsing snippet embedded in `rx_poc.sh`
 - Network access to [wttr.in](https://wttr.in) if you want live data
 - Permissions to make scripts executable and, optionally, to add a cron job
 
@@ -36,6 +37,11 @@ Collect daily weather observations for Casablanca (or another city) and compare 
 - `fc_accuracy.txt` – Commentary on how forecast accuracy metrics are derived.
 - `weekly_stats.txt` – Notes covering recent-period summary calculations.
 - `weather-pipeline.txt` – Full explanation of the GitHub Actions workflow.
+
+## Runtime Requirements & Environment
+- **Local execution:** Scripts rely on the tools listed under *What You Need*; no additional services are required.
+- **Environment variables:** None are mandatory for local runs. The GitHub Actions workflow injects the dispatch `city` input as a `CITY` environment variable for the pipeline step. When running locally, pass `-c <city>` to `rx_poc.sh` to override the default.
+- **File paths:** Override default output locations by passing positional arguments to `basic.sh` and `fc_accuracy.sh`, or the `-l`/`-o` flags to `rx_poc.sh`.
 
 ## Automating the Scripts
 - **Cron (local machine):** Schedule `rx_poc.sh` at Casablanca noon. Example for a system in UTC-5:
