@@ -1,0 +1,152 @@
+Line 1: `#!/usr/bin/env bash`
+  - Shebang selecting Bash via `/usr/bin/env` so the script runs correctly even when Bash is installed in different locations on different systems.
+
+Line 2: `# Generate historical forecast accuracy metrics from rx_poc.log entries.`
+  - Comment summarizing that this utility derives accuracy statistics from the raw weather log produced by the ETL script.
+
+Line 3: `set -euo pipefail`
+  - Enables strict mode: abort on any command failure (`-e`), treat unset variables as errors (`-u`), and fail pipelines if any command fails (`pipefail`), preventing partial or corrupted outputs.
+
+Line 5: `LOG_FILE=${1:-rx_poc.log}`
+  - Reads the first positional argument as the source log file, defaulting to `rx_poc.log` so the script can be run with no arguments in the normal workflow.
+
+Line 6: `OUTPUT_FILE=${2:-historical_fc_accuracy.tsv}`
+  - Captures an optional second argument for the output path, defaulting to `historical_fc_accuracy.tsv` to match the rest of the tooling.
+
+Line 8: `if [[ ! -f $LOG_FILE ]]; then`
+  - Starts a guard that checks the input log exists before doing any work, avoiding obscure downstream errors.
+
+Line 9: `  echo "Input log $LOG_FILE does not exist." >&2`
+  - Prints an error message to standard error, which makes the failure obvious even when stdout is redirected.
+
+Line 10: `  exit 1`
+  - Exits immediately with a non-zero status, signaling that the run failed because the required input is missing.
+
+Line 11: `fi`
+  - Closes the existence check.
+
+Line 13: `TMP_FILE=$(mktemp)`
+  - Creates a uniquely named temporary file to stage the accuracy output safely before moving it into place.
+
+Line 14: `trap 'rm -f "$TMP_FILE"' EXIT`
+  - Registers a trap so the temporary file is deleted automatically when the script exits, even on failure or interruption, preventing litter in `/tmp`.
+
+Line 16: `printf 'year\tmonth\tday\tobs_temp\tfc_temp\taccuracy\taccuracy_range\n' >"$TMP_FILE"`
+  - Writes the header row for the accuracy dataset into the temp file, ensuring the final TSV always starts with the expected column names.
+
+Line 18: `AWK_SCRIPT='BEGIN {FS="\t"}`
+  - Begins an embedded AWK program, setting the field separator to a tab so AWK splits the TSV fields correctly.
+
+Line 19: `NR==1 {next}`
+  - Skips the first line (the header) of the input log so only data records are processed.
+
+Line 20: `/^#/ {next}`
+  - Ignores comment lines (starting with `#`), keeping the computation focused on data rows.
+
+Line 21: `/^[[:space:]]*$/ {next}`
+  - Skips blank or whitespace-only lines to avoid generating bogus accuracy entries.
+
+Line 22: `{`
+  - Opens the main AWK action block that runs for every remaining line.
+
+Line 23: `  if (!has_prev) {`
+  - Checks whether a previous-day forecast has been captured yet; the first data row provides tomorrow’s forecast and should not emit an output row.
+
+Line 24: `    prev_fc=$5;`
+  - Stores the fifth field (forecast temperature) from the first data record for use when the next observation arrives.
+
+Line 25: `    has_prev=1;`
+  - Sets a flag so subsequent iterations know a previous forecast is available.
+
+Line 26: `    next;`
+  - Skips the rest of the block for the first record, since there is no observed temperature yet to compare against the stored forecast.
+
+Line 27: `  }`
+  - Ends the initial-record guard.
+
+Line 28: `  obs=$4+0`
+  - Converts the fourth field (observed temperature) to a numeric value, forcing AWK to treat it as a number for arithmetic.
+
+Line 29: `  fc_prev=prev_fc+0`
+  - Converts the stored previous forecast to numeric form so the subtraction that follows is numeric, not string-based.
+
+Line 30: `  err=fc_prev-obs`
+  - Computes the signed forecast error: the forecast from the prior day minus the actual observed temperature.
+
+Line 31: `  abs_err=(err < 0) ? -err : err`
+  - Calculates the absolute error via a ternary expression, ensuring the later accuracy classification works with positive magnitudes.
+
+Line 32: `  if (abs_err <= 1) {`
+  - Begins the accuracy bucket logic; errors ≤1°C are considered the highest quality.
+
+Line 33: `    range="excellent"`
+  - Labels very small errors as `excellent` for quick qualitative assessment.
+
+Line 34: `  } else if (abs_err <= 2) {`
+  - Continues the conditional chain; errors within 2°C are classified as the next tier.
+
+Line 35: `    range="good"`
+  - Assigns the `good` label for moderate accuracy.
+
+Line 36: `  } else if (abs_err <= 4) {`
+  - Checks for errors within 4°C, which are acceptable but less precise.
+
+Line 37: `    range="fair"`
+  - Marks these as `fair` to communicate middling performance.
+
+Line 38: `  } else {`
+  - Captures all larger errors beyond 4°C.
+
+Line 39: `    range="poor"`
+  - Labels large deviations as `poor`, highlighting forecasts that missed the mark significantly.
+
+Line 40: `  }`
+  - Ends the accuracy classification cascade.
+
+Line 41: `  printf "%s\t%s\t%s\t%.1f\t%.1f\t%.1f\t%s\n", $1, $2, $3, obs, fc_prev, err, range`
+  - Emits a tab-separated output row with date fields, observed and forecast temperatures (one decimal), the signed error, and the textual range.
+
+Line 42: `  prev_fc=$5;`
+  - Updates `prev_fc` with the current line’s forecast so the next loop iteration compares it with tomorrow’s observation.
+
+Line 43: `  records++`
+  - Increments a counter (unused later but available for future enhancements or validation).
+
+Line 44: `}'`
+  - Closes the AWK script definition.
+
+Line 46: `if ! awk "$AWK_SCRIPT" "$LOG_FILE" >>"$TMP_FILE"; then`
+  - Runs the AWK program against the log, appending results to the temp file; if AWK fails (non-zero exit), the `if !` guard triggers.
+
+Line 47: `  echo "Failed to compute forecast accuracy" >&2`
+  - Reports the failure to stderr so callers and automation notice the computation didn’t succeed.
+
+Line 48: `  exit 1`
+  - Aborts the script with an error status when AWK fails, preventing propagation of incomplete results.
+
+Line 49: `fi`
+  - Ends the AWK failure check.
+
+Line 51: `line_count=$(wc -l <"$TMP_FILE")`
+  - Counts how many lines are in the temp file (including the header) to see whether any accuracy rows were produced.
+
+Line 52: `if (( line_count <= 1 )); then`
+  - Tests whether only the header is present (no data rows), meaning the log lacked enough entries to compute accuracy.
+
+Line 53: `  echo "Log $LOG_FILE does not yet have enough entries to calculate accuracy." >&2`
+  - Emits an informational message so the caller knows the script ran fine but lacked sufficient data.
+
+Line 54: `  mv "$TMP_FILE" "$OUTPUT_FILE"`
+  - Still moves the temp file into place, ensuring the output file exists with just the header for consistency.
+
+Line 55: `  exit 0`
+  - Exits successfully because this situation is expected when the pipeline is still warming up.
+
+Line 56: `fi`
+  - Closes the line-count guard.
+
+Line 58: `mv "$TMP_FILE" "$OUTPUT_FILE"`
+  - Writes the fully populated temp file to the desired output path, replacing any existing accuracy file atomically.
+
+Line 59: `echo "Wrote forecast accuracy metrics to $OUTPUT_FILE"`
+  - Prints a success message confirming where the updated accuracy data now lives.

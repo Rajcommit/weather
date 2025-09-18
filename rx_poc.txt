@@ -1,0 +1,231 @@
+Line 1: `#!/usr/bin/env bash`
+  - Shebang that launches the script using the first `bash` found in the user’s PATH, keeping it portable across distributions.
+
+Line 2: `# Collect Casablanca weather observations and forecasts from wttr.in.`
+  - High-level comment stating the script’s purpose: fetch current and forecast data from wttr.in.
+
+Line 3: `set -euo pipefail`
+  - Enables strict shell behavior: abort on errors (`-e`), treat unset variables as errors (`-u`), and fail pipelines if any component fails (`pipefail`) to prevent silent data corruption.
+
+Line 5: `CITY="Casablanca"`
+  - Sets the default city name used for API requests; can be overridden via CLI options later.
+
+Line 6: `LOG_FILE="rx_poc.log"`
+  - Default path to the tab-delimited log that stores observed and forecast temperatures.
+
+Line 7: `RAW_OUTPUT="weather_report.json"`
+  - Default location to save the full JSON payload from wttr.in for later inspection or debugging.
+
+Line 8: `TZ_REGION="Africa/Casablanca"`
+  - Timezone identifier used when computing the local date, ensuring entries align with the city’s local clock.
+
+Line 10: `declare -a CLEANUP_FILES`
+  - Creates an empty bash array that will track temporary files so they can be removed automatically on exit.
+
+Line 12: `usage() {`
+  - Begins a helper function that prints usage information when the user requests help or provides bad options.
+
+Line 13: `  cat <<USAGE`
+  - Uses a here-document to send the following block to `cat`, enabling multi-line usage text without numerous `echo` calls.
+
+Line 14: `Usage: ${0##*/} [-c city] [-l log_file] [-o raw_output]`
+  - Shows how to run the script and the optional flags; `${0##*/}` strips any leading directory from the script name.
+
+Line 15: `  -c city        City name understood by wttr.in (default: Casablanca)`
+  - Documents the `-c` flag and its default behavior.
+
+Line 16: `  -l log_file    Log file to append tab-delimited weather records (default: rx_poc.log)`
+  - Explains the `-l` option.
+
+Line 17: `  -o raw_output  Path to store the most recent raw API payload (default: weather_report.json)`
+  - Describes the `-o` option.
+
+Line 18: `USAGE`
+  - Terminates the here-document, causing the usage text to print.
+
+Line 19: `}`
+  - Ends the `usage` function definition.
+
+Line 21: `while getopts ":c:l:o:h" opt; do`
+  - Starts parsing command-line options; the colon at the front tells `getopts` to handle missing-option-argument errors explicitly.
+
+Line 22: `  case "$opt" in`
+  - Opens a case statement to respond to each parsed option.
+
+Line 23: `    c) CITY=$OPTARG ;;`
+  - Updates `CITY` when the `-c` flag appears, using the provided value.
+
+Line 24: `    l) LOG_FILE=$OPTARG ;;`
+  - Processes the `-l` flag by overriding the log file path.
+
+Line 25: `    o) RAW_OUTPUT=$OPTARG ;;`
+  - Handles the `-o` flag to change where the raw JSON is stored.
+
+Line 26: `    h)`
+  - Matches the help flag `-h`.
+
+Line 27: `      usage`
+  - Prints the usage instructions.
+
+Line 28: `      exit 0`
+  - Exits successfully after showing help.
+
+Line 29: `      ;;`
+  - Ends the `h` case block.
+
+Line 30: `    :)`
+  - Traps missing option arguments (because of the leading colon in the option spec).
+
+Line 31: `      echo "Missing value for -$OPTARG" >&2`
+  - Informs the user that a required value was not supplied.
+
+Line 32: `      usage >&2`
+  - Prints the usage text to stderr for emphasis.
+
+Line 33: `      exit 1`
+  - Exits with failure since the command line was invalid.
+
+Line 34: `      ;;`
+  - Ends the missing-value case.
+
+Line 35: `    ?)`
+  - Catches all unrecognized options.
+
+Line 36: `      echo "Unknown option: -$OPTARG" >&2`
+  - Warns the user about the unknown flag.
+
+Line 37: `      usage >&2`
+  - Displays usage guidance again.
+
+Line 38: `      exit 1`
+  - Exits with failure for invalid input.
+
+Line 39: `      ;;`
+  - Ends the unknown-option case.
+
+Line 40: `  esac`
+  - Closes the case statement.
+
+Line 41: `done`
+  - Ends option parsing; non-option arguments (if any) are ignored.
+
+Line 43: `mkdir -p "$(dirname "$RAW_OUTPUT")"`
+  - Ensures the directory that will hold the raw JSON exists; `-p` avoids errors if it already does.
+
+Line 44: `API_URL="https://wttr.in/${CITY// /%20}?format=j1"`
+  - Builds the wttr.in API URL, replacing spaces in the city with `%20` and requesting JSON (`format=j1`).
+
+Line 45: `TEMP_JSON=$(mktemp)`
+  - Creates a temporary file path for storing the downloaded JSON securely.
+
+Line 46: `CLEANUP_FILES+=("$TEMP_JSON")`
+  - Registers the temp file in the cleanup array so it can be deleted automatically later.
+
+Line 47: `trap 'for f in "${CLEANUP_FILES[@]}"; do [[ -f $f ]] && rm -f "$f"; done' EXIT`
+  - Sets an EXIT trap that iterates through all tracked temp files and removes them, ensuring no temporary artifacts remain even on failure.
+
+Line 49: `if ! curl -fsS --retry 3 --retry-delay 2 "$API_URL" -o "$TEMP_JSON"; then`
+  - Downloads the JSON from wttr.in with curl, failing the script if the request fails; retries up to three times with small delays for resilience.
+
+Line 50: `  echo "Failed to download weather data from wttr.in for $CITY" >&2`
+  - Logs an error message to stderr when the network request ultimately fails.
+
+Line 51: `  exit 1`
+  - Aborts the script due to download failure.
+
+Line 52: `fi`
+  - Ends the download failure guard.
+
+Line 54: `if ! cp "$TEMP_JSON" "$RAW_OUTPUT"; then`
+  - Copies the raw payload into the user-specified location, checking for write errors (e.g., permission problems).
+
+Line 55: `  echo "Unable to write raw response to $RAW_OUTPUT" >&2`
+  - Reports the write failure to stderr.
+
+Line 56: `  exit 1`
+  - Stops the script because preserving the raw payload is part of its contract.
+
+Line 57: `fi`
+  - Ends the copy check.
+
+Line 59: `read -r OBS_TEMP FC_TEMP <<VALUES`
+  - Prepares to read two whitespace-separated values (observed and forecast temps) into shell variables from a here-document.
+
+Line 60: `$(python3 - "$TEMP_JSON" <<'PY'`
+  - Embeds a Python script executed via stdin (`-`), passing the temp file path as an argument to perform JSON parsing.
+
+Lines 61-96: *(Embedded Python script)*
+  - Parses the JSON, extracts the current observed temperature and the forecast near noon tomorrow, prints them with one decimal, and exits with descriptive errors if anything is missing.
+
+Line 97: `)
+VALUES`
+  - Completes the here-document, feeding the Python output into the earlier `read` command.
+
+Line 99: `if [[ -z ${OBS_TEMP:-} || -z ${FC_TEMP:-} ]]; then`
+  - Verifies that both temperatures were populated; the `:-` fallback avoids undefined-variable errors because of `set -u`.
+
+Line 100: `  echo "Failed to parse observed or forecast temperature" >&2`
+  - Emits an error when parsing failed, e.g., because the API response changed format.
+
+Line 101: `  exit 1`
+  - Stops execution since missing temperatures make the log entry invalid.
+
+Line 102: `fi`
+  - Ends the parsing guard.
+
+Line 104: `expected_header=$'year\tmonth\tday\tobs_temp\tfc_temp'`
+  - Defines the exact header the log file must contain, using ANSI-C quoting to embed literal tab characters.
+
+Line 105: `if [[ ! -f $LOG_FILE || ! -s $LOG_FILE ]]; then`
+  - Checks whether the log file is missing or empty; if so, it will be initialized with the correct header.
+
+Line 106: `  printf '%s\n' "$expected_header" >"$LOG_FILE"`
+  - Writes the header to the log, creating the file if necessary.
+
+Line 107: `elif [[ $(head -n1 "$LOG_FILE") != $expected_header ]]; then`
+  - Otherwise, ensures the first line of the existing log matches the expected header; if not, it resets the header.
+
+Line 108: `  {`
+  - Opens a grouped command for rewriting the file.
+
+Line 109: `    printf '%s\n' "$expected_header"`
+  - Prints the correct header to the group.
+
+Line 110: `    tail -n +2 "$LOG_FILE" 2>/dev/null || true`
+  - Emits all existing data rows (skipping the old header) and ignores errors so empty files do not break the script.
+
+Line 111: `  } >"$LOG_FILE.tmp"`
+  - Directs the grouped output into a temporary file to avoid partial writes.
+
+Line 112: `  mv "$LOG_FILE.tmp" "$LOG_FILE"`
+  - Atomically replaces the old log with the corrected version.
+
+Line 113: `fi`
+  - Closes the header management conditional.
+
+Line 115: `YEAR=$(TZ="$TZ_REGION" date +%Y)`
+  - Captures the current year in Casablanca’s time zone using the `date` command with a temporary `TZ` override.
+
+Line 116: `MONTH=$(TZ="$TZ_REGION" date +%m)`
+  - Gets the local month value (`01`–`12`) for the log entry.
+
+Line 117: `DAY=$(TZ="$TZ_REGION" date +%d)`
+  - Retrieves the local day of the month, ensuring entries align with local calendar days.
+
+Line 119: `if awk -F '\t' -v y="$YEAR" -v m="$MONTH" -v d="$DAY" 'NR>1 && $1==y && $2==m && $3==d {exit 0} END {exit 1}' "$LOG_FILE"; then`
+  - Checks the log for an existing entry with the same date by scanning past the header; exits success if found.
+
+Line 120: `  echo "An entry for $YEAR-$MONTH-$DAY already exists in $LOG_FILE. Skipping append." >&2`
+  - Warns the user that today’s data is already recorded, avoiding duplicate entries.
+
+Line 121: `  exit 0`
+  - Exits gracefully since the log is up-to-date.
+
+Line 122: `fi`
+  - Closes the duplicate-entry guard.
+
+Line 124: `printf '%s\t%s\t%s\t%.1f\t%.1f\n' "$YEAR" "$MONTH" "$DAY" "$OBS_TEMP" "$FC_TEMP" >>"$LOG_FILE"`
+  - Appends the new record with formatted temperatures, ensuring consistency with the header ordering.
+
+Line 125: `echo "Appended weather record for $YEAR-$MONTH-$DAY to $LOG_FILE"`
+  - Prints a confirmation message so the user knows the script succeeded.

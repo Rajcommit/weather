@@ -1,0 +1,77 @@
+Line 1: `#!/usr/bin/env bash`
+  - Shebang invoking the first `bash` in the PATH so the script runs consistently regardless of where Bash is installed.
+
+Line 2: `# Report min/max absolute forecast errors over the most recent seven days.`
+  - Comment describing the script’s purpose: summarize recent forecast accuracy by reporting extreme absolute errors.
+
+Line 3: `set -euo pipefail`
+  - Enables strict mode: exit immediately on errors (`-e`), treat unset variables as errors (`-u`), and propagate pipeline failures (`pipefail`) to avoid partial calculations.
+
+Line 5: `ACCURACY_FILE=${1:-historical_fc_accuracy.tsv}`
+  - Reads the first positional argument as the accuracy dataset path; defaults to `historical_fc_accuracy.tsv` so it works out of the box.
+
+Line 7: `if [[ ! -f $ACCURACY_FILE ]]; then`
+  - Checks that the specified accuracy file exists before continuing.
+
+Line 8: `  echo "Accuracy file $ACCURACY_FILE does not exist." >&2`
+  - Sends an explanatory error message to standard error when the file is missing.
+
+Line 9: `  exit 1`
+  - Aborts the script with a failure code because there is nothing to process.
+
+Line 10: `fi`
+  - Ends the existence check conditional.
+
+Line 12: `mapfile -t recent_accuracy < <(tail -n +2 "$ACCURACY_FILE" | awk -F '\t' '{print $6}' | sed '/^\s*$/d' | tail -n 7)`
+  - Reads the 6th column (signed error) from the TSV, skipping the header, dropping blank lines, and keeping only the last seven values, placing them into a bash array `recent_accuracy`.
+
+Line 14: `if ((${#recent_accuracy[@]} == 0)); then`
+  - Tests whether the array is empty, which means no accuracy values were found.
+
+Line 15: `  echo "No accuracy readings available in $ACCURACY_FILE." >&2`
+  - Reports that the dataset contains no usable entries.
+
+Line 16: `  exit 1`
+  - Stops execution because without values, the min/max cannot be computed.
+
+Line 17: `fi`
+  - Closes the empty-array guard.
+
+Line 19: `if ((${#recent_accuracy[@]} < 7)); then`
+  - Issues a warning when fewer than seven values are available (for example, early in the dataset).
+
+Line 20: `  echo "Warning: fewer than seven accuracy values available; using ${#recent_accuracy[@]} entries." >&2`
+  - Prints the warning to stderr so it’s visible yet separate from the main output.
+
+Line 21: `fi`
+  - Ends the warning conditional.
+
+Line 23: `abs_values=()`
+  - Initializes an empty array that will store absolute error values formatted to two decimals.
+
+Line 24: `for value in "${recent_accuracy[@]}"; do`
+  - Begins a loop over each signed error extracted earlier.
+
+Line 25: `  abs_values+=("$(awk -v v="$value" 'BEGIN {if (v < 0) v = -v; printf "%.2f", v}')")`
+  - Uses AWK to convert each value to its absolute magnitude and format it with two decimal places before appending it to `abs_values`.
+
+Line 26: `done`
+  - Ends the loop, leaving `abs_values` populated with normalized error magnitudes.
+
+Line 28: `read -r min_error max_error <<RANGE`
+  - Prepares to read two whitespace-separated numbers from a here-document into `min_error` and `max_error`.
+
+Line 29: `$(printf '%s\n' "${abs_values[@]}" | awk 'NR==1 {min=$1; max=$1} {if ($1+0 < min+0) min=$1; if ($1+0 > max+0) max=$1} END {printf "%.2f %.2f", min, max}')`
+  - Prints each absolute value on its own line, then uses AWK to iterate through them to find the numeric minimum and maximum, formatting both to two decimals.
+
+Line 30: `RANGE`
+  - Ends the here-document, feeding the AWK output into the preceding `read` command.
+
+Line 32: `echo "Processed ${#abs_values[@]} accuracy values from $ACCURACY_FILE"`
+  - Reports how many entries were analyzed, giving context for the min/max summary.
+
+Line 33: `echo "Minimum absolute error: ${min_error}°C"`
+  - Prints the smallest absolute error found, labeled and suffixed with degrees Celsius.
+
+Line 34: `echo "Maximum absolute error: ${max_error}°C"`
+  - Prints the largest absolute error with the same formatting for quick comparison.

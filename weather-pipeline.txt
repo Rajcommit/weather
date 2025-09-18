@@ -1,0 +1,239 @@
+Line 1: `name: Weather data pipeline`
+  - Sets the workflow’s display name in the GitHub Actions UI so runs are easy to identify.
+
+Line 3: `on:`
+  - Begins the trigger section, defining what events start this workflow.
+
+Line 4: `  workflow_dispatch:`
+  - Configures the workflow to run manually from the Actions tab via the “Run workflow” button.
+
+Line 5: `    inputs:`
+  - Opens the configuration for user-supplied inputs when manually starting the workflow.
+
+Line 6: `      city:`
+  - Declares an input parameter named `city` that lets the user choose which location to fetch weather data for.
+
+Line 7: `        description: "City name understood by wttr.in"`
+  - Provides helper text describing the expected format for the `city` input.
+
+Line 8: `        required: false`
+  - Makes the input optional; the workflow can run without the user providing a value.
+
+Line 9: `        default: "Casablanca"`
+  - Sets the default city to Casablanca when the user leaves the input blank.
+
+Line 12: `jobs:`
+  - Starts the job definitions; each job runs on a separate runner.
+
+Line 13: `  run-pipeline:`
+  - Names the job “run-pipeline” for clarity in logs and dependency graphs.
+
+Line 14: `    name: Run weather ETL pipeline`
+  - Provides a human-readable summary shown in the Actions UI for this job.
+
+Line 15: `    runs-on: ubuntu-latest`
+  - Specifies the GitHub-hosted runner image (`ubuntu-latest`) that will execute the job steps.
+
+Line 17: `    steps:`
+  - Begins the ordered list of tasks executed within the job.
+
+Line 18: `      - name: Check out repository`
+  - Defines the first step, which will retrieve the repository contents.
+
+Line 19: `        uses: actions/checkout@v4`
+  - Invokes the official checkout action (version 4) to clone the repository into the runner workspace.
+
+Line 21: `      - name: Ensure scripts are executable`
+  - Names the second step, which makes sure shell scripts have the correct permissions before running.
+
+Line 22: `        run: |`
+  - Indicates this step uses a shell script block as its command.
+
+Line 23: `          chmod +x basic.sh rx_poc.sh fc_accuracy.sh weekly_stats.sh`
+  - Runs chmod to set the executable bit on all key scripts, preventing permission errors later.
+
+Line 25: `      - name: Execute weather pipeline`
+  - Labels the main step that orchestrates the ETL pipeline logic.
+
+Line 26: `        id: pipeline`
+  - Assigns an `id` so later steps could reference outputs from this step if needed.
+
+Line 27: `        env:`
+  - Begins the list of environment variables exposed to the step’s shell.
+
+Line 28: `          CITY: ${{ inputs.city }}`
+  - Sets the `CITY` environment variable from the workflow dispatch input so scripts can read the target city.
+
+Line 29: `        run: |`
+  - Marks the start of the shell script block executed for the pipeline step.
+
+Line 30: `          set -euo pipefail`
+  - Enables strict Bash mode inside the pipeline step to fail fast on errors, undefined variables, and pipeline issues.
+
+Line 32: `          WORKDIR="pipeline_outputs"`
+  - Defines a local directory (within the runner workspace) to hold all generated artifacts for easy upload later.
+
+Line 33: `          mkdir -p "$WORKDIR"`
+  - Creates the work directory if it doesn’t already exist, guarding against missing directories.
+
+Line 35: `          LOG_PATH="$WORKDIR/rx_poc.log"`
+  - Sets the path within `WORKDIR` where the weather log will be stored during the workflow run.
+
+Line 36: `          ACCURACY_PATH="$WORKDIR/historical_fc_accuracy.tsv"`
+  - Defines the location for the derived accuracy dataset.
+
+Line 37: `          RAW_PATH="$WORKDIR/weather_report.json"`
+  - Identifies where the raw API payload should be saved.
+
+Line 38: `          TEMPLATE_PATH="$WORKDIR/rx_poc_manual_input.tsv"`
+  - Specifies the path for the manual data entry template to keep all artifacts in one folder.
+
+Line 40: `          echo "Initializing data files"`
+  - Logs a message to provide context for the upcoming initialization step.
+
+Line 41: `          ./basic.sh "$LOG_PATH" "$ACCURACY_PATH" "$TEMPLATE_PATH"`
+  - Runs the initialization script, directing it to create the log, accuracy file, and template inside `WORKDIR`.
+
+Line 43: `          echo "Collecting weather observation and forecast for $CITY"`
+  - Prints which city is being processed, useful when sequences of runs are compared.
+
+Line 44: `          ./rx_poc.sh -c "$CITY" -l "$LOG_PATH" -o "$RAW_PATH"`
+  - Executes the data collection script, overriding defaults so output is stored in the workflow’s dedicated directory.
+
+Line 46: `          echo "Computing historical accuracy dataset"`
+  - Signals that the accuracy computation is about to run.
+
+Line 47: `          ./fc_accuracy.sh "$LOG_PATH" "$ACCURACY_PATH"`
+  - Converts the updated log into a forecast accuracy dataset stored alongside other artifacts.
+
+Line 49: `          SUMMARY_FILE="$WORKDIR/weekly_stats.txt"`
+  - Declares a file path for capturing the weekly statistics or any notices about insufficient data.
+
+Line 50: `          if [[ $(wc -l <"$ACCURACY_PATH") -gt 1 ]]; then`
+  - Checks whether the accuracy dataset has more than just the header row (i.e., at least one record) before attempting weekly stats.
+
+Line 51: `            echo "Generating weekly statistics"`
+  - Logs a status message indicating the statistics computation is running.
+
+Line 52: `            ./weekly_stats.sh "$ACCURACY_PATH" | tee "$SUMMARY_FILE"`
+  - Runs the weekly stats script, simultaneously displaying the output and saving it to `SUMMARY_FILE` via `tee`.
+
+Line 53: `          else`
+  - Alternative branch when there are no data rows yet.
+
+Line 54: `            echo "Not enough accuracy records to compute weekly statistics" | tee "$SUMMARY_FILE"`
+  - Records a message explaining why statistics were skipped, ensuring the summary file always exists.
+
+Line 55: `          fi`
+  - Ends the conditional around statistics generation.
+
+Line 57: `          {`
+  - Opens a command group that builds a markdown summary for the GitHub Actions run.
+
+Line 58: `            echo "### Weather Pipeline Summary"`
+  - Adds a markdown heading to the summary output.
+
+Line 59: `            echo ""`
+  - Inserts an empty line for readability.
+
+Line 60: `            echo "* **City:** $CITY"`
+  - Writes a bullet with the processed city name.
+
+Line 61: `            echo "* **Log file:** $LOG_PATH"`
+  - Notes where the pipeline stored the log file.
+
+Line 62: `            echo "* **Accuracy dataset:** $ACCURACY_PATH"`
+  - Records the path to the accuracy dataset.
+
+Line 63: `            echo ""`
+  - Adds spacing before the next section.
+
+Line 64: `            echo "#### Weekly statistics"`
+  - Adds a subsection heading for the statistics block.
+
+Line 65: `            echo '```'`
+  - Starts a fenced code block to format the weekly stats output monospaced.
+
+Line 66: `            cat "$SUMMARY_FILE"`
+  - Inserts either the generated stats or the “not enough records” message into the summary.
+
+Line 67: `            echo '```'`
+  - Closes the code block.
+
+Line 68: `            echo ""`
+  - Adds a blank line between sections.
+
+Line 69: `            echo "#### Latest log entry"`
+  - Starts a section showing the most recent log entry appended during this run.
+
+Line 70: `            if [[ -s $LOG_PATH ]]; then`
+  - Ensures the log file has content before attempting to display the tail.
+
+Line 71: `              echo '```'`
+  - Opens a code block for the latest log row.
+
+Line 72: `              tail -n 1 "$LOG_PATH"`
+  - Shows the last line of the log (the entry created in this run).
+
+Line 73: `              echo '```'`
+  - Closes the code block.
+
+Line 74: `            else`
+  - Handles the edge case where the log is somehow empty.
+
+Line 75: `              echo "No log entries recorded."`
+  - Prints a message indicating there is no data to show.
+
+Line 76: `            fi`
+  - Ends the log-display conditional.
+
+Line 77: `            echo ""`
+  - Blank line before the next section.
+
+Line 78: `            echo "#### Accuracy dataset preview"`
+  - Introduces a preview of the top portion of the accuracy file.
+
+Line 79: `            if [[ -s $ACCURACY_PATH ]]; then`
+  - Checks that the accuracy file has content before showing a preview.
+
+Line 80: `              echo '```'`
+  - Opens a code block for the dataset snippet.
+
+Line 81: `              head -n 10 "$ACCURACY_PATH"`
+  - Displays the first ten lines (header plus up to nine rows) of the accuracy file for a quick preview.
+
+Line 82: `              echo '```'`
+  - Ends the preview code block.
+
+Line 83: `            else`
+  - Handles the case of an empty accuracy file.
+
+Line 84: `              echo "Accuracy dataset is empty."`
+  - States that no accuracy records were generated.
+
+Line 85: `            fi`
+  - Ends the accuracy preview conditional.
+
+Line 86: `          } >>"$GITHUB_STEP_SUMMARY"`
+  - Redirects the assembled markdown summary into GitHub’s step summary file so it appears in the run UI.
+
+Line 88: `      - name: Upload pipeline artifacts`
+  - Defines the final step that will save outputs for later download.
+
+Line 89: `        if: always()`
+  - Ensures the artifact upload runs even if previous steps fail, preserving diagnostic files.
+
+Line 90: `        uses: actions/upload-artifact@v4`
+  - Calls the official artifact upload action (version 4) to package artifacts.
+
+Line 91: `        with:`
+  - Begins the configuration block for the upload action.
+
+Line 92: `          name: weather-pipeline-${{ github.run_id }}`
+  - Sets a unique artifact name using the GitHub run ID to differentiate multiple runs.
+
+Line 93: `          path: pipeline_outputs/`
+  - Points the uploader at the directory that holds all generated files from earlier steps.
+
+Line 94: `          retention-days: 7`
+  - Controls how long GitHub retains the artifact (seven days) before automatic deletion.

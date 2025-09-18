@@ -30,6 +30,13 @@ Collect daily weather observations for Casablanca (or another city) and compare 
 2. Run `./fc_accuracy.sh rx_poc_manual_input.tsv manual_accuracy.tsv` to generate accuracy metrics without calling the API.
 3. Use `manual_accuracy.tsv` as the input to `./weekly_stats.sh` if you want to continue the analysis offline.
 
+## Detailed Script Guides
+- `basic.txt` – Line-by-line explanation of `basic.sh` initialization logic.
+- `rx_poc.txt` – Detailed walkthrough of the data collection script and its safeguards.
+- `fc_accuracy.txt` – Commentary on how forecast accuracy metrics are derived.
+- `weekly_stats.txt` – Notes covering recent-period summary calculations.
+- `weather-pipeline.txt` – Full explanation of the GitHub Actions workflow.
+
 ## Automating the Scripts
 - **Cron (local machine):** Schedule `rx_poc.sh` at Casablanca noon. Example for a system in UTC-5:
   ```cron

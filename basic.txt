@@ -1,0 +1,128 @@
+Line 1: `#!/usr/bin/env bash`
+  - Shebang that tells the system to run this script with the Bash interpreter found via `/usr/bin/env` so it works across systems where Bash lives in different paths.
+
+Line 2: `# Initialize project data files used by the weather ETL workflow.`
+  - Comment summarizing the script’s purpose: prepare the core data files that the entire weather pipeline relies on before any ingestion or analysis runs.
+
+Line 3: `set -euo pipefail`
+  - Enables three safety options: `-e` exits immediately on any command failure, `-u` treats unset variables as errors, and `-o pipefail` makes a pipeline fail if any component command fails—together, they stop partial or silent failures.
+
+Line 5: `LOG_FILE=${1:-rx_poc.log}`
+  - Reads the first CLI argument as the log file path; defaults to `rx_poc.log` if no argument is provided, letting callers override where the observation log should live.
+
+Line 6: `ACCURACY_FILE=${2:-historical_fc_accuracy.tsv}`
+  - Same pattern for the derived accuracy dataset, using the second CLI argument or falling back to the standard filename.
+
+Line 7: `INPUT_TEMPLATE=${3:-rx_poc_manual_input.tsv}`
+  - Captures an optional third argument for the manual-entry template, defaulting to `rx_poc_manual_input.tsv` to keep local data entry consistent.
+
+Line 9: `ensure_header() {`
+  - Starts a helper function that enforces a specific header line on a file, handling both initialization and correction.
+
+Line 10: `  local file=$1`
+  - Declares the first function argument as a local variable `file`, isolating it from the global shell scope.
+
+Line 11: `  local header=$2`
+  - Stores the expected header text in a second local variable, ensuring the function compares against the correct string each time.
+
+Line 12: `  if [[ ! -f $file || ! -s $file ]]; then`
+  - Checks whether the target file is missing or empty; either condition triggers header initialization since the file cannot yet contain usable data.
+
+Line 13: `    printf '%s\n' "$header" >"$file"`
+  - Writes the header line followed by a newline directly into the file, creating or truncating it so it starts cleanly with just the header.
+
+Line 14: `    echo "Initialized $file with header"`
+  - Prints a status message to inform the user that the file was created or reset with the requested header.
+
+Line 15: `    return`
+  - Exits the function early after initializing the file to avoid running the remaining header-check logic.
+
+Line 16: `  fi`
+  - Ends the conditional block that handles missing or empty files.
+
+Line 17: `  local existing`
+  - Declares a local variable that will hold the current header line so subsequent comparisons do not leak into the outer shell scope.
+
+Line 18: `  existing=$(head -n1 "$file" || true)`
+  - Reads the first line from the file; `|| true` prevents `set -e` from exiting if `head` fails (for example, on a zero-byte file).
+
+Line 19: `  if [[ $existing != "$header" ]]; then`
+  - Compares the found header with the desired header, and only proceeds if they differ—this handles cases where someone edited or corrupted the header.
+
+Line 20: `    {`
+  - Opens a command group, allowing the script to redirect its combined output once instead of per command.
+
+Line 21: `      printf '%s\n' "$header"`
+  - Prints the correct header so the rebuilt file starts with the expected column layout.
+
+Line 22: `      tail -n +2 "$file" 2>/dev/null || true`
+  - Emits every line except the first from the existing file to preserve data rows; ignores errors (e.g., files with only a header) to keep the script resilient.
+
+Line 23: `    } >"${file}.tmp"`
+  - Redirects the grouped output into a temporary file named `file.tmp`, ensuring the rewrite is atomic and does not corrupt the original if something fails mid-way.
+
+Line 24: `    mv "${file}.tmp" "$file"`
+  - Replaces the original file with the corrected temporary file, committing the header fix while keeping the existing data rows.
+
+Line 25: `    echo "Reset header for $file"`
+  - Notifies the user that the header was repaired, providing immediate feedback that the data structure changed.
+
+Line 26: `  fi`
+  - Closes the mismatched-header conditional.
+
+Line 27: `}`
+  - Ends the `ensure_header` function definition.
+
+Line 29: `ensure_log() {`
+  - Defines a wrapper function for initializing the primary observation log with its specific header text.
+
+Line 30: `  ensure_header "$LOG_FILE" $'year\tmonth\tday\tobs_temp\tfc_temp'`
+  - Calls `ensure_header` with the log filename and a tab-delimited header string, using ANSI C quoting (`$''`) so actual tab characters are embedded.
+
+Line 31: `}`
+  - Ends the `ensure_log` function.
+
+Line 33: `ensure_accuracy() {`
+  - Starts another wrapper for the accuracy dataset, keeping header details in one place for clarity.
+
+Line 34: `  ensure_header "$ACCURACY_FILE" $'year\tmonth\tday\tobs_temp\tfc_temp\taccuracy\taccuracy_range'`
+  - Invokes `ensure_header` with the accuracy file path and its extended header that includes error metrics and qualitative labels.
+
+Line 35: `}`
+  - Ends the `ensure_accuracy` function definition.
+
+Line 37: `ensure_template() {`
+  - Opens the helper that prepares the manual-entry template with both a header and instructional comments.
+
+Line 38: `  ensure_header "$INPUT_TEMPLATE" $'year\tmonth\tday\tobs_temp\tfc_temp'`
+  - Reuses `ensure_header` to guarantee the template starts with the same columns as the live log so they stay compatible.
+
+Line 39: `  if ! grep -q '^#' "$INPUT_TEMPLATE"; then`
+  - Checks whether the file already contains any comment lines (`#` prefix); if not, the script appends guidance for users entering manual samples.
+
+Line 40: `    {`
+  - Begins another grouped redirection so both instruction lines are appended together.
+
+Line 41: `      printf '%s\n' $'# Add additional rows below using tab-separated values, e.g.:'`
+  - Writes the first instructional comment explaining how to add new rows and reinforcing the need for tab separators.
+
+Line 42: `      printf '%s\n' $'# 2024\t05\t01\t23.5\t24.0'`
+  - Adds a concrete example row showing the expected formatting, including literal tab characters between values.
+
+Line 43: `    } >>"$INPUT_TEMPLATE"`
+  - Appends the grouped instructional lines to the template file without disturbing existing data.
+
+Line 44: `  fi`
+  - Ends the conditional that guards the instructional comment insertion.
+
+Line 45: `}`
+  - Closes the `ensure_template` function definition.
+
+Line 47: `ensure_log`
+  - Executes the log-initialization helper so the base observation file exists with the correct header before other scripts run.
+
+Line 48: `ensure_accuracy`
+  - Runs the accuracy-file initializer, guaranteeing downstream analytics have a properly structured destination file.
+
+Line 49: `ensure_template`
+  - Calls the template initializer last so users always have a manual-entry worksheet with guidance, even on fresh clones.
