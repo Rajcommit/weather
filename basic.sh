@@ -7,20 +7,20 @@ ACCURACY_FILE=${2:-historical_fc_accuracy.tsv}
 INPUT_TEMPLATE=${3:-rx_poc_manual_input.tsv}
 
 ensure_header() {
-  local file=$1
-  local header=$2
-  if [[ ! -f $file || ! -s $file ]]; then
-    printf '%s\n' "$header" >"$file"
+  local file=$1  ##Local file is in use which limits the scope to this function only
+  local header=$2  ##Local file is in use which limits the scope to this function only
+  if [[ ! -f $file || ! -s $file ]]; then   ## The file is not thee or the file is there but it is empty**
+    printf '%s\n' "$header" >"$file"      ###%s means: "print the argument as a string", "\n menas: "adda new line after prinitn."  prepares output using the format string
     echo "Initialized $file with header"
-    return
+    return    ## immediately exits the function ensure_header after printing the message.
   fi
-  local existing
-  existing=$(head -n1 "$file" || true)
-  if [[ $existing != "$header" ]]; then
+  local existing  ##Declares a local variable named existing inside the function
+  existing=$(head -n1 "$file" || true)   ##In "exisiting" variable we are storing content of the file, even if the contents fail, use conditon true
+  if [[ $existing != "$header" ]]; then   ##Test if the string value in the variable existing is not equal (!=) to the string value in the variable header.
     {
-      printf '%s\n' "$header"
-      tail -n +2 "$file" 2>/dev/null || true
-    } >"${file}.tmp"
+      printf '%s\n' "$header"  #Print the all the string in the header and line by line
+      tail -n +2 "$file" 2>/dev/null || true ##consider the lines except the first two lines and if there is any error pass it to null if all good make the condition true	  
+    } >"${file}.tmp"    ## more result to filename.tmp
     mv "${file}.tmp" "$file"
     echo "Reset header for $file"
   fi
