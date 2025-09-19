@@ -47,7 +47,28 @@ ensure_header() {
 }
 ```
 
-This function ensures a file exists, is not empty, and has the correct header line.
+---
+```This function ensures a file exists, is not empty, and has the correct header line.
+
+In printf '%s\n' "$header" >"$file" the '%s\n' part is called the format string.
+
+%s means: "print the argument as a string."
+\n means: "add a new line (line break) after printing."
+
+So, '%s\n' tells printf to:
+
+Print one string (replace %s with the value of $header)
+Go to the next line (add a newline character so the file doesn't run all words together)
+
+Example:
+If $header is "Name\tAge",
+the command will create a file with
+
+text
+Name    Age
+on the first line, and then move to the next line, ready for more data. ```
+
+
 
 ### ✅ What it does:
 
