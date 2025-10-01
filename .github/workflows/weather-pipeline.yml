@@ -84,6 +84,16 @@ jobs:
             fi
           } >>"$GITHUB_STEP_SUMMARY"
 
+      - name: Publish pipeline outputs branch
+        if: success()
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: weather-data
+          publish_dir: pipeline_outputs
+          keep_files: false
+          commit_message: "Weather data update (run ${{ github.run_id }})"
+
       - name: Upload pipeline artifacts
         if: always()
         uses: actions/upload-artifact@v4
